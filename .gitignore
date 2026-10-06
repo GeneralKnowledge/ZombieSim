@@ -1,0 +1,18 @@
+# Godot 4
+.godot/
+*.translation
+export.cfg
+export_presets.cfg
+.import/
+*.tmp
+
+# OS / editor
+.DS_Store
+*~
+*.swp
+.vscode/
+.idea/
+
+# Benchmark dumps
+benchmarks/results/*.json
+!benchmarks/results/.gitkeep

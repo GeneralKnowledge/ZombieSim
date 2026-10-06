@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://bfpsprobe0050"]
+
+[ext_resource type="Script" path="res://tools/fps_probe.gd" id="1_probe"]
+
+[node name="FpsProbe" type="Node"]
+script = ExtResource("1_probe")
+population = 50000
+warmup_sec = 1.0
+sample_sec = 3.0
