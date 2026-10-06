@@ -16,12 +16,18 @@ class PopulationCell:
 	var radius: float = 8.0
 	var pressure: float = 0.0
 	var horde_id: int = -1
+	var region_id: int = -1
+	var flow_target_conn: int = -1
 	var active: bool = true
 
 
 var cells: Array[PopulationCell] = []
 var _free: PackedInt32Array = PackedInt32Array()
 var _rng := RandomNumberGenerator.new()
+var last_transfers: int = 0
+var last_transfer_pop: int = 0
+var last_merges: int = 0
+var last_splits: int = 0
 
 
 func _init() -> void:
@@ -31,6 +37,10 @@ func _init() -> void:
 func clear() -> void:
 	cells.clear()
 	_free.clear()
+	last_transfers = 0
+	last_transfer_pop = 0
+	last_merges = 0
+	last_splits = 0
 
 
 func living_count() -> int:
@@ -79,6 +89,8 @@ func create_cell(
 	cell.radius = radius
 	cell.pressure = maxf(0.0, cell.density - 1.0)
 	cell.horde_id = horde_id
+	cell.region_id = -1
+	cell.flow_target_conn = -1
 	cell.active = true
 	return idx
 
@@ -114,22 +126,46 @@ func spawn_population_blob(pop: int, center: Vector3, extent: float, faction: in
 	return created
 
 
-func update(delta: float, player_pos: Vector3, attract: bool, half_extent: float) -> void:
+func update(delta: float, player_pos: Vector3, attract: bool, half_extent: float, nav: NavGraph = null) -> void:
 	var max_speed := SimConfig.HORDE_MAX_SPEED
 	var attract_str := SimConfig.HORDE_ATTRACT_STRENGTH
 	for cell in cells:
 		if not cell.active or cell.population <= 0:
 			continue
+		if nav != null and nav.region_count() > 0:
+			cell.region_id = nav.find_region_at(cell.position)
+			if cell.region_id >= 0 and cell.region_id < nav.regions.size():
+				var region: NavGraph.NavRegion = nav.regions[cell.region_id]
+				# Pressure from region capacity (aggregate crowd, not physics).
+				var fill := float(cell.population) / maxf(float(region.capacity), 1.0)
+				cell.pressure = maxf(cell.pressure, maxf(0.0, fill - 0.6) * 5.0)
+				cell.floor_id = region.floor_id
 		var v := cell.velocity
 		if attract:
-			var to_player := player_pos - cell.position
-			to_player.y = 0.0
-			if to_player.length_squared() > 0.01:
-				v += to_player.normalized() * attract_str * delta
 			cell.alertness = minf(cell.alertness + delta * 2.0, 1.0)
 			cell.destination = player_pos
+			# Prefer nav flow target when available — avoid per-zombie steering for fields.
+			var steered := false
+			if nav != null and cell.region_id >= 0:
+				var next_c := nav.next_connection_from(cell.region_id)
+				cell.flow_target_conn = next_c
+				if next_c >= 0 and next_c < nav.connections.size():
+					var conn: NavGraph.NavConnection = nav.connections[next_c]
+					var to_door := conn.position - cell.position
+					to_door.y = 0.0
+					if to_door.length_squared() > 0.25:
+						v += to_door.normalized() * attract_str * delta
+						steered = true
+					else:
+						# At doorway — wait for capacity transfer (handled in apply_nav_transfers).
+						v *= 0.5
+						steered = true
+			if not steered:
+				var to_player := player_pos - cell.position
+				to_player.y = 0.0
+				if to_player.length_squared() > 0.01:
+					v += to_player.normalized() * attract_str * delta
 		else:
-			# Drift toward destination + mild noise
 			var to_dest := cell.destination - cell.position
 			to_dest.y = 0.0
 			if to_dest.length_squared() > 1.0:
@@ -141,16 +177,84 @@ func update(delta: float, player_pos: Vector3, attract: bool, half_extent: float
 			cell.radius = minf(cell.radius + cell.pressure * delta * 2.0, 60.0)
 			cell.density = float(cell.population) / maxf(cell.radius * cell.radius * PI, 1.0)
 			cell.pressure = maxf(0.0, cell.density - 1.0)
-		# Clamp speed
 		var spd := Vector3(v.x, 0.0, v.z).length()
 		if spd > max_speed:
 			v = v * (max_speed / spd)
 		cell.velocity = v
 		cell.position += Vector3(v.x, 0.0, v.z) * delta
 		cell.position.y = float(cell.floor_id) * SimConfig.FLOOR_HEIGHT + 0.5
-		# Bounds
 		cell.position.x = clampf(cell.position.x, -half_extent, half_extent)
 		cell.position.z = clampf(cell.position.z, -half_extent, half_extent)
+
+
+## Capacity-limited population transfer through nav connections (bottleneck simulation).
+func apply_nav_transfers(nav: NavGraph, delta: float) -> int:
+	last_transfers = 0
+	last_transfer_pop = 0
+	if nav == null or nav.connection_count() == 0:
+		return 0
+	var moved_total := 0
+	for cell_i in cells.size():
+		var cell: PopulationCell = cells[cell_i]
+		if not cell.active or cell.population <= 0:
+			continue
+		if cell.region_id < 0:
+			cell.region_id = nav.find_region_at(cell.position)
+		var conn_id := cell.flow_target_conn
+		if conn_id < 0:
+			conn_id = nav.next_connection_from(cell.region_id)
+			cell.flow_target_conn = conn_id
+		if conn_id < 0:
+			continue
+		var conn: NavGraph.NavConnection = nav.connections[conn_id]
+		if not conn.active or conn.blocked:
+			continue
+		# Only transfer when near the doorway / connection point.
+		if cell.position.distance_to(conn.position) > maxf(cell.radius, 10.0):
+			continue
+		var dest_region := nav.other_region(conn_id, cell.region_id)
+		if dest_region < 0:
+			continue
+		var budget := nav.available_transfer(conn_id, delta)
+		if budget <= 0:
+			# Pressure builds when blocked by capacity.
+			cell.pressure = minf(cell.pressure + delta * 2.0, 20.0)
+			continue
+		var take := mini(budget, cell.population)
+		# Gradual: don't dump entire mega-field in one tick.
+		take = mini(take, maxi(1, int(conn.capacity_per_sec)))
+		if take <= 0:
+			continue
+		# Find or create a field in the destination region.
+		var dest_idx := _find_or_create_region_cell(dest_region, nav, cell.faction, cell.horde_id)
+		var transferred := transfer_population(cell_i, dest_idx, take)
+		if transferred > 0:
+			var dest_cell: PopulationCell = cells[dest_idx]
+			dest_cell.region_id = dest_region
+			dest_cell.destination = cell.destination
+			dest_cell.alertness = maxf(dest_cell.alertness, cell.alertness)
+			dest_cell.flow_target_conn = nav.next_connection_from(dest_region)
+			moved_total += transferred
+			last_transfers += 1
+			last_transfer_pop += transferred
+			# Source pressure drops slightly after release.
+			if cell.active:
+				cell.pressure = maxf(0.0, cell.pressure - float(transferred) * 0.01)
+	return moved_total
+
+
+func _find_or_create_region_cell(region_id: int, nav: NavGraph, faction: int, horde_id: int) -> int:
+	for i in cells.size():
+		var c: PopulationCell = cells[i]
+		if c.active and c.region_id == region_id and c.faction == faction:
+			if horde_id < 0 or c.horde_id == horde_id or c.horde_id < 0:
+				if c.horde_id < 0:
+					c.horde_id = horde_id
+				return i
+	var region: NavGraph.NavRegion = nav.regions[region_id]
+	var idx := create_cell(0, region.center, faction, 8.0, region.floor_id, horde_id)
+	cells[idx].region_id = region_id
+	return idx
 
 
 func try_merge(merge_distance: float) -> int:
@@ -166,10 +270,14 @@ func try_merge(merge_distance: float) -> int:
 				continue
 			if a.faction != b.faction or a.floor_id != b.floor_id:
 				continue
+			# Prefer same region when assigned.
+			if a.region_id >= 0 and b.region_id >= 0 and a.region_id != b.region_id:
+				continue
 			if a.position.distance_to(b.position) > merge_distance:
 				continue
 			# Merge B into A (aggregate — no per-member iteration)
-			var total := a.population + b.population
+			var before := a.population + b.population
+			var total := before
 			var w_a := float(a.population) / float(total)
 			var w_b := float(b.population) / float(total)
 			a.position = a.position * w_a + b.position * w_b
@@ -181,9 +289,14 @@ func try_merge(merge_distance: float) -> int:
 			a.alertness = maxf(a.alertness, b.alertness)
 			if a.horde_id < 0:
 				a.horde_id = b.horde_id
+			if a.region_id < 0:
+				a.region_id = b.region_id
 			destroy_cell(j)
+			if a.population != before:
+				push_warning("Field merge conservation mismatch")
 			merges += 1
 			break
+	last_merges = merges
 	return merges
 
 
@@ -197,7 +310,7 @@ func try_split_overdense() -> int:
 			continue
 		if cell.density < threshold and cell.pressure < 1.5:
 			continue
-		# Split into two aggregate cells (population-field manipulation)
+		var before := cell.population
 		var half := cell.population / 2
 		if half < 50:
 			continue
@@ -216,11 +329,49 @@ func try_split_overdense() -> int:
 		neu.velocity = cell.velocity.rotated(Vector3.UP, 0.4)
 		neu.destination = cell.destination
 		neu.alertness = cell.alertness
+		neu.region_id = cell.region_id
+		neu.flow_target_conn = cell.flow_target_conn
 		cell.radius *= 0.75
 		cell.density = float(cell.population) / maxf(cell.radius * cell.radius * PI, 1.0)
 		cell.pressure = maxf(0.0, cell.density - 1.0)
+		if cell.population + neu.population != before:
+			push_warning("Field split conservation mismatch")
 		splits += 1
+	last_splits = splits
 	return splits
+
+
+## Split a cell toward an alternate connection when the primary route is blocked/saturated.
+func split_toward_alternate(nav: NavGraph, cell_idx: int, alt_conn: int, amount: int) -> int:
+	if cell_idx < 0 or cell_idx >= cells.size():
+		return -1
+	var cell: PopulationCell = cells[cell_idx]
+	if not cell.active or amount <= 0 or amount >= cell.population:
+		return -1
+	if alt_conn < 0 or alt_conn >= nav.connections.size():
+		return -1
+	var before := cell.population
+	cell.population -= amount
+	var conn: NavGraph.NavConnection = nav.connections[alt_conn]
+	var new_idx := create_cell(
+		amount,
+		cell.position + (conn.position - cell.position).normalized() * cell.radius * 0.5,
+		cell.faction,
+		cell.radius * 0.7,
+		cell.floor_id,
+		cell.horde_id
+	)
+	var neu: PopulationCell = cells[new_idx]
+	neu.destination = cell.destination
+	neu.alertness = cell.alertness
+	neu.region_id = cell.region_id
+	neu.flow_target_conn = alt_conn
+	neu.velocity = (conn.position - cell.position).normalized() * SimConfig.HORDE_MAX_SPEED
+	cell.density = float(cell.population) / maxf(cell.radius * cell.radius * PI, 1.0)
+	if cell.population + neu.population != before:
+		push_warning("Alternate split conservation mismatch")
+	last_splits += 1
+	return new_idx
 
 
 func transfer_population(from_idx: int, to_idx: int, amount: int) -> int:

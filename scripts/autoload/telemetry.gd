@@ -11,11 +11,14 @@ var population_update_ms: float = 0.0
 var agent_update_ms: float = 0.0
 var materialisation_ms: float = 0.0
 var horde_update_ms: float = 0.0
+var journey_update_ms: float = 0.0
 
 var population: int = 0
 var lightweight_agents: int = 0
 var active_agents: int = 0
 var detailed_agents: int = 0
+var individual_agents: int = 0
+var expensive_sim_agents: int = 0
 var visible_dots: int = 0
 var population_fields: int = 0
 var horde_count: int = 0
@@ -26,6 +29,20 @@ var combat_ring_agents: int = 0
 var shots_fired: int = 0
 var kills_individual: int = 0
 var kills_field: int = 0
+var agent_updates: int = 0
+var nav_regions: int = 0
+var nav_connections: int = 0
+var nav_flow_rebuilds: int = 0
+var path_requests: int = 0
+var population_transfers: int = 0
+var transfer_population: int = 0
+var horde_splits: int = 0
+var horde_merges: int = 0
+var journey_count: int = 0
+var journey_population: int = 0
+var journey_arrivals: int = 0
+var sim_cost_per_pop: float = 0.0
+var expensive_fraction: float = 0.0
 
 var _frame_times: PackedFloat32Array = PackedFloat32Array()
 var _sim_times: PackedFloat32Array = PackedFloat32Array()
@@ -107,10 +124,13 @@ func snapshot() -> Dictionary:
 		"agent_update_ms": agent_update_ms,
 		"materialisation_ms": materialisation_ms,
 		"horde_update_ms": horde_update_ms,
+		"journey_update_ms": journey_update_ms,
 		"population": population,
 		"lightweight_agents": lightweight_agents,
 		"active_agents": active_agents,
 		"detailed_agents": detailed_agents,
+		"individual_agents": individual_agents,
+		"expensive_sim_agents": expensive_sim_agents,
 		"visible_dots": visible_dots,
 		"population_fields": population_fields,
 		"horde_count": horde_count,
@@ -121,6 +141,20 @@ func snapshot() -> Dictionary:
 		"shots_fired": shots_fired,
 		"kills_individual": kills_individual,
 		"kills_field": kills_field,
+		"agent_updates": agent_updates,
+		"nav_regions": nav_regions,
+		"nav_connections": nav_connections,
+		"nav_flow_rebuilds": nav_flow_rebuilds,
+		"path_requests": path_requests,
+		"population_transfers": population_transfers,
+		"transfer_population": transfer_population,
+		"horde_splits": horde_splits,
+		"horde_merges": horde_merges,
+		"journey_count": journey_count,
+		"journey_population": journey_population,
+		"journey_arrivals": journey_arrivals,
+		"sim_cost_per_pop": sim_cost_per_pop,
+		"expensive_fraction": expensive_fraction,
 		"static_memory_mb": float(OS.get_static_memory_usage()) / (1024.0 * 1024.0),
 	}
 
@@ -132,16 +166,27 @@ func format_hud() -> String:
 		"FPS %d  (min %d avg %.0f)\n" % [int(s.fps), int(s.min_fps) if s.min_fps < 9000 else 0, s.avg_fps]
 		+ "Frame %.2f ms  (max %.2f avg %.2f)\n" % [s.frame_time_ms, s.max_frame_time_ms, s.avg_frame_time_ms]
 		+ "Sim %.2f ms  RenderCPU %.2f ms\n" % [s.sim_time_ms, s.render_time_ms]
-		+ "  fieldUpd %.2f  agentUpd %.2f  hordeUpd %.2f  matUpd %.2f\n" % [
-			s.population_update_ms, s.agent_update_ms, s.horde_update_ms, s.materialisation_ms
+		+ "  field %.2f agent %.2f horde %.2f mat %.2f journey %.2f\n" % [
+			s.population_update_ms, s.agent_update_ms, s.horde_update_ms, s.materialisation_ms, s.journey_update_ms
 		]
-		+ "Population %d\n" % s.population
-		+ "  fields %d  hordes %d\n" % [s.population_fields, s.horde_count]
+		+ "TOTAL POPULATION %d\n" % s.population
+		+ "  fields %d  hordes %d  journeys %d (%d)\n" % [
+			s.population_fields, s.horde_count, s.journey_count, s.journey_population
+		]
 		+ "  light %d  active %d  detailed %d\n" % [s.lightweight_agents, s.active_agents, s.detailed_agents]
-		+ "Visible dots %d\n" % s.visible_dots
-		+ "Combat ring %d | fires %d\n" % [s.combat_ring_agents, s.fire_volumes]
-		+ "Shots %d | kills ind %d / field %d\n" % [s.shots_fired, s.kills_individual, s.kills_field]
-		+ "Mat/demat %d / %d\n" % [s.materialisations_this_frame, s.dematerialisations_this_frame]
-		+ "Memory %.1f MB\n" % s.static_memory_mb
+		+ "Visible dots %d | agent updates %d\n" % [s.visible_dots, s.agent_updates]
+		+ "Nav regions %d conn %d | flow rebuilds %d | paths %d\n" % [
+			s.nav_regions, s.nav_connections, s.nav_flow_rebuilds, s.path_requests
+		]
+		+ "Transfers %d (%d pop) | splits %d merges %d\n" % [
+			s.population_transfers, s.transfer_population, s.horde_splits, s.horde_merges
+		]
+		+ "SIM COST / POP %.6f ms | expensive frac %.4f\n" % [s.sim_cost_per_pop, s.expensive_fraction]
+		+ "Combat ring %d | fires %d | shots %d | kills %d/%d\n" % [
+			s.combat_ring_agents, s.fire_volumes, s.shots_fired, s.kills_individual, s.kills_field
+		]
+		+ "Mat/demat %d / %d | Memory %.1f MB\n" % [
+			s.materialisations_this_frame, s.dematerialisations_this_frame, s.static_memory_mb
+		]
 		+ "GPU %s\n" % gpu
 	)

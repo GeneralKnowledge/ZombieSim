@@ -34,6 +34,17 @@ var FIELD_THRESHOLD_POP: int = 200
 var HORDE_ATTRACT_STRENGTH: float = 18.0
 var HORDE_COHESION: float = 0.35
 var HORDE_MAX_SPEED: float = 6.0
+var HORDE_MERGE_DISTANCE: float = 45.0
+
+# --- Navigation / flow (aggregate, not per-zombie) ---
+var FLOW_REBUILD_INTERVAL: float = 0.75
+var DEFAULT_DOOR_CAPACITY: float = 50.0
+var WORLD_SEED: int = 42
+
+# --- Journeys (very distant aggregate travel) ---
+var JOURNEY_ENABLED: bool = true
+var RADIUS_JOURNEY: float = 280.0
+var JOURNEY_MIN_POP: int = 3000
 
 # --- Agent motion ---
 var AGENT_MAX_SPEED: float = 4.5
@@ -85,6 +96,7 @@ var show_navigation: bool = false
 var show_simulation_levels: bool = true
 var simulation_paused: bool = false
 var attract_active: bool = false
+var city_mode: bool = true
 
 # --- Startup / benchmark ---
 var initial_population: int = 10000

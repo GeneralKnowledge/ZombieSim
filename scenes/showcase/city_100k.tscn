@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://bmainmillion001"]
+[gd_scene load_steps=12 format=3 uid="uid://bcity100kshow01"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="2_player"]
@@ -27,7 +27,7 @@ height = 1.6
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
-initial_population = 2500
+initial_population = 100000
 sim_hz = 20.0
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
@@ -73,8 +73,8 @@ script = ExtResource("6_render")
 script = ExtResource("9_dir")
 player_path = NodePath("../Player")
 main_path = NodePath("..")
-auto_start = true
-base_horde = 8000
+auto_start = false
+base_horde = 0
 
 [node name="GameHUD" type="CanvasLayer" parent="."]
 script = ExtResource("8_hud")

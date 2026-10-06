@@ -25,9 +25,14 @@ func _wire_buttons() -> void:
 	_bind("%BtnFields", "toggle_fields", 0)
 	_bind("%BtnLevels", "toggle_levels", 0)
 	_bind("%BtnGrid", "toggle_grid", 0)
+	_bind("%BtnNav", "toggle_nav", 0)
+	_bind("%BtnFlow", "toggle_flow", 0)
 	_bind("%BtnPause", "pause", 0)
 	_bind("%BtnStep", "step", 0)
 	_bind("%BtnDensity", "density", 100000)
+	_bind("%BtnCity100k", "city_100k", 100000)
+	_bind("%BtnBottleneck", "bottleneck", 100000)
+	_bind("%BtnResetBench", "reset_benchmark", 0)
 	_bind("%BtnResetStats", "reset_stats", 0)
 	_bind("%BtnMolotov", "molotov", 0)
 	_bind("%BtnShoot", "shoot", 0)
@@ -44,13 +49,14 @@ func _bind(path: String, cmd: String, amount: int) -> void:
 func _on_telemetry(_s: Dictionary) -> void:
 	telemetry_label.text = Telemetry.format_hud()
 	status_label.text = (
-		"Attract:%s Paused:%s Fields:%s Levels:%s Iso:%s Ring:%s\n" % [
+		"Attract:%s Paused:%s Fields:%s Levels:%s Nav:%s Flow:%s Iso:%s\n" % [
 			str(SimConfig.attract_active),
 			str(SimConfig.simulation_paused),
 			str(SimConfig.show_population_fields),
 			str(SimConfig.show_simulation_levels),
+			str(SimConfig.show_navigation),
+			str(SimConfig.show_flow_fields),
 			str(SimConfig.isometric_mode),
-			str(SimConfig.show_combat_ring),
 		]
-		+ "WASD move | Shift sprint | LMB/C shoot | F molotov | R reload | G interact | I cam"
+		+ "WASD move | Shift sprint | LMB/C shoot | F molotov | R reload | G interact | I cam | Space attract"
 	)
