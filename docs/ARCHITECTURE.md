@@ -82,15 +82,34 @@ Only after:
 
 Then isolate behind a narrow API (e.g. positions/densities in/out). Do not design v1 around GDExtension.
 
+## Combat ring + fire (vertical slice)
+
+```
+Player aim / shoot / molotov
+        │
+        ▼
+ CombatRing (budgeted ACTIVE/DETAILED near player)
+        │ hitscan individuals in ring
+        │ else aggregate field damage
+        ▼
+ FireSystem volumes
+        │ burn agents in radius (budgeted scan)
+        │ burn overlapping fields aggregately
+        ▼
+ shared VFX markers (MultiMesh fire patches)
+```
+
+Molotovs never create per-zombie flame nodes. Hordes lose population through field burn + flee velocity.
+
 ## File map
 
 ```
 scripts/
   autoload/sim_config.gd      budgets & toggles
   autoload/telemetry.gd       first-class profiling
-  simulation/*.gd             mass population systems
+  simulation/*.gd             mass population + combat/fire
   rendering/agent_renderer.gd MultiMesh sync
-  player/fly_camera.gd        free fly + attract
+  player/fly_camera.gd        fly / isometric + aim
   world/world_setup.gd        primitive 3D world
   ui/debug_ui.gd              stress controls
   benchmarks/benchmark_runner.gd
