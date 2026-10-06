@@ -39,12 +39,33 @@ var HORDE_MAX_SPEED: float = 6.0
 var AGENT_MAX_SPEED: float = 4.5
 var AGENT_WANDER_STRENGTH: float = 1.2
 
+# --- Combat ring (shootable individuals) ---
+var COMBAT_RING_RADIUS: float = 28.0
+var SHOOT_RANGE: float = 45.0
+var SHOOT_HIT_RADIUS: float = 1.2
+var SHOOT_DAMAGE: float = 55.0
+var SHOOT_FIELD_POP_DAMAGE: int = 12
+var COMBAT_PROMOTIONS_PER_TICK: int = 48
+
+# --- Fire / Molotov (area events) ---
+var MOLOTOV_THROW_RANGE: float = 22.0
+var MOLOTOV_RADIUS: float = 9.0
+var MOLOTOV_INTENSITY: float = 1.0
+var MOLOTOV_LIFETIME: float = 14.0
+var FIRE_AGENT_DPS: float = 40.0
+var FIRE_FIELD_KILL_RATE: float = 0.35
+var MAX_FIRE_AGENT_CHECKS_PER_TICK: int = 2048
+var MAX_FIRE_VOLUMES: int = 32
+
 # --- Rendering ---
 var MULTIMESH_BATCH_SIZE: int = 16384
 var DOT_SCALE_LIGHTWEIGHT: float = 0.35
 var DOT_SCALE_ACTIVE: float = 0.55
 var DOT_SCALE_DETAILED: float = 0.85
 var FIELD_MARKER_SCALE: float = 2.5
+var show_combat_ring: bool = true
+var show_fire_volumes: bool = true
+var isometric_mode: bool = true
 
 # --- Simulation levels (bit-friendly ints) ---
 const LEVEL_FIELD: int = 0

@@ -10,8 +10,11 @@ var fields: PopulationFieldSystem = PopulationFieldSystem.new()
 var hordes: HordeSystem = HordeSystem.new()
 var spatial: SpatialHash = SpatialHash.new()
 var relevance: RelevanceSystem = RelevanceSystem.new()
+var fire: FireSystem = FireSystem.new()
+var combat: CombatRing = CombatRing.new()
 
 var player_position: Vector3 = Vector3.ZERO
+var player_aim: Vector3 = Vector3(0, 0, -1)
 var half_extent: float = 512.0
 var _rng := RandomNumberGenerator.new()
 var _rebuild_spatial_timer: float = 0.0
@@ -34,6 +37,8 @@ func clear() -> void:
 	fields.clear()
 	hordes.clear()
 	spatial.clear()
+	fire.clear()
+	combat.clear_stats()
 	population_changed.emit(total_population())
 
 
@@ -111,6 +116,16 @@ func extreme_density_building(amount: int = 100000) -> void:
 	population_changed.emit(total_population())
 
 
+func throw_molotov() -> int:
+	if fire.living_count() >= SimConfig.MAX_FIRE_VOLUMES:
+		return -1
+	return fire.throw_molotov(player_position, player_aim, 0)
+
+
+func shoot() -> Dictionary:
+	return combat.shoot(agents, fields, player_position, player_aim)
+
+
 func tick(delta: float) -> void:
 	last_materialised = 0
 	last_dematerialised = 0
@@ -154,7 +169,12 @@ func tick(delta: float) -> void:
 			SimConfig.RADIUS_VISIBLE * 1.5,
 			SimConfig.MAX_MATERIALISATIONS_PER_FRAME
 		)
-	# Relevance / LOD promotions — skip when level visuals are disabled.
+	# Combat ring: promote nearby agents to shootable ACTIVE/DETAILED (budgeted).
+	if agents.living > 0:
+		last_materialised += combat.maintain_ring(
+			agents, player_position, SimConfig.COMBAT_PROMOTIONS_PER_TICK
+		)
+	# Optional visual LOD pass.
 	if agents.living > 0 and SimConfig.show_simulation_levels:
 		var level_changes := relevance.apply_levels(
 			agents,
@@ -164,6 +184,9 @@ func tick(delta: float) -> void:
 		)
 		last_materialised += level_changes.x
 		last_dematerialised += level_changes.y
+	# Fire volumes — aggregate on fields, individual in/near ring.
+	if fire.living_count() > 0:
+		fire.update(delta, agents, fields)
 	Telemetry.materialisation_ms = float(Time.get_ticks_usec() - t_section) / 1000.0
 
 	if has_fields:
@@ -191,3 +214,8 @@ func _publish_telemetry() -> void:
 	Telemetry.horde_count = hordes.living_count()
 	Telemetry.materialisations_this_frame = last_materialised
 	Telemetry.dematerialisations_this_frame = last_dematerialised
+	Telemetry.fire_volumes = fire.living_count()
+	Telemetry.combat_ring_agents = combat.ring_agent_count
+	Telemetry.shots_fired = combat.shots_fired
+	Telemetry.kills_individual = combat.individual_kills + fire.total_agent_kills
+	Telemetry.kills_field = combat.field_kills + fire.total_field_kills

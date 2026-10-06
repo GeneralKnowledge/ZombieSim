@@ -28,12 +28,13 @@ small capped set of detailed NPCs
 - **Godot 4.3+** (Forward Plus)
 - No Rust in v1 — Godot-first. Rust is an escape hatch only after profiling.
 
-## Quick start
+## Quick start — combat sandbox
 
 1. Open this folder in Godot 4.3+.
-2. Run `scenes/main.tscn` (project main scene).
-3. Fly with **WASD + QE**, **Shift** sprint, **Space** attract, **Esc** free mouse.
-4. Use the debug panel to spawn populations / hordes.
+2. Run `scenes/main.tscn`.
+3. **WASD** move (iso), mouse aim, **LMB** shoot, **F** molotov, **R** reload, **G** door/loot.
+4. Waves spawn growing hordes automatically; survive and score kills.
+5. Debug panel still supports mass-population stress spawns.
 
 ```bash
 # Optional CLI (headless smoke / benchmarks)
@@ -74,6 +75,9 @@ Rendering (`scripts/rendering/agent_renderer.gd`) reads simulation data and uplo
 | Split / Merge Hordes | Population-field manipulation |
 | Space / Toggle Attract | Strong stimulus toward player |
 | Extreme Density 100k | Constrained high-pressure field |
+| Shoot (R) / click | Hitscan combat ring; else field damage |
+| Molotov (F) | Area fire — individuals + aggregate fields |
+| Toggle Isometric (I) | Orthographic iso camera |
 | Pause / Step | Deterministic inspection |
 | Toggle Population Fields | Show/hide Level 0 markers |
 

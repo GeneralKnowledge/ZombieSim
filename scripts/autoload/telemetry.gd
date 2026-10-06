@@ -21,6 +21,11 @@ var population_fields: int = 0
 var horde_count: int = 0
 var materialisations_this_frame: int = 0
 var dematerialisations_this_frame: int = 0
+var fire_volumes: int = 0
+var combat_ring_agents: int = 0
+var shots_fired: int = 0
+var kills_individual: int = 0
+var kills_field: int = 0
 
 var _frame_times: PackedFloat32Array = PackedFloat32Array()
 var _sim_times: PackedFloat32Array = PackedFloat32Array()
@@ -111,6 +116,11 @@ func snapshot() -> Dictionary:
 		"horde_count": horde_count,
 		"materialisations_this_frame": materialisations_this_frame,
 		"dematerialisations_this_frame": dematerialisations_this_frame,
+		"fire_volumes": fire_volumes,
+		"combat_ring_agents": combat_ring_agents,
+		"shots_fired": shots_fired,
+		"kills_individual": kills_individual,
+		"kills_field": kills_field,
 		"static_memory_mb": float(OS.get_static_memory_usage()) / (1024.0 * 1024.0),
 	}
 
@@ -129,6 +139,8 @@ func format_hud() -> String:
 		+ "  fields %d  hordes %d\n" % [s.population_fields, s.horde_count]
 		+ "  light %d  active %d  detailed %d\n" % [s.lightweight_agents, s.active_agents, s.detailed_agents]
 		+ "Visible dots %d\n" % s.visible_dots
+		+ "Combat ring %d | fires %d\n" % [s.combat_ring_agents, s.fire_volumes]
+		+ "Shots %d | kills ind %d / field %d\n" % [s.shots_fired, s.kills_individual, s.kills_field]
 		+ "Mat/demat %d / %d\n" % [s.materialisations_this_frame, s.dematerialisations_this_frame]
 		+ "Memory %.1f MB\n" % s.static_memory_mb
 		+ "GPU %s\n" % gpu

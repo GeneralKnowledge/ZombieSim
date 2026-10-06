@@ -6,9 +6,12 @@ var _sim_node: Node = null
 var _mmi: MultiMeshInstance3D
 var _lod_mmi: MultiMeshInstance3D
 var _field_mmi: MultiMeshInstance3D
+var _fire_mmi: MultiMeshInstance3D
+var _ring_mi: MeshInstance3D
 var _buffer: PackedFloat32Array = PackedFloat32Array()
 var _lod_buffer: PackedFloat32Array = PackedFloat32Array()
 var _field_buffer: PackedFloat32Array = PackedFloat32Array()
+var _fire_buffer: PackedFloat32Array = PackedFloat32Array()
 var _scan_cursor: int = 0
 var _frame_i: int = 0
 var upload_interval: int = 1
@@ -16,7 +19,9 @@ var upload_interval: int = 1
 const MASS_STRIDE := 12
 const LOD_STRIDE := 16
 const FIELD_STRIDE := 12
+const FIRE_STRIDE := 12
 const LOD_CAP := 1536
+const FIRE_CAP := 32
 
 
 func _ready() -> void:
@@ -34,12 +39,26 @@ func _ready() -> void:
 	add_child(_lod_mmi)
 	_field_mmi = _make_mmi(_make_field_mesh(), _make_mat(Color(0.35, 0.65, 0.95, 0.45), true), false, 256)
 	add_child(_field_mmi)
+	_fire_mmi = _make_mmi(_make_field_mesh(), _make_mat(Color(1.0, 0.35, 0.08, 0.65), true), false, FIRE_CAP)
+	add_child(_fire_mmi)
+	_ring_mi = MeshInstance3D.new()
+	var ring_mesh := TorusMesh.new()
+	ring_mesh.inner_radius = SimConfig.COMBAT_RING_RADIUS - 0.35
+	ring_mesh.outer_radius = SimConfig.COMBAT_RING_RADIUS
+	ring_mesh.rings = 12
+	ring_mesh.ring_segments = 32
+	_ring_mi.mesh = ring_mesh
+	_ring_mi.material_override = _make_mat(Color(1.0, 0.85, 0.2, 0.35), true)
+	_ring_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_ring_mi)
 	_buffer.resize(SimConfig.MAX_VISIBLE_AGENTS * MASS_STRIDE)
 	_lod_buffer.resize(LOD_CAP * LOD_STRIDE)
 	_field_buffer.resize(256 * FIELD_STRIDE)
+	_fire_buffer.resize(FIRE_CAP * FIRE_STRIDE)
 	_mmi.multimesh.buffer = _buffer
 	_lod_mmi.multimesh.buffer = _lod_buffer
 	_field_mmi.multimesh.buffer = _field_buffer
+	_fire_mmi.multimesh.buffer = _fire_buffer
 	print("AgentRenderer ready mass=%d lod=%d upload_interval=%d gpu=%s" % [
 		_mmi.multimesh.instance_count, LOD_CAP, upload_interval, RenderingServer.get_video_adapter_name()
 	])
@@ -105,11 +124,14 @@ func _process(_delta: float) -> void:
 		return
 	if DisplayServer.get_name() == "headless":
 		return
+	var world: SimulationWorld = _sim_node.get_simulation()
+	# Fire + combat ring markers stay responsive even when mass upload is throttled.
+	_sync_fire(world)
+	_sync_combat_ring(world)
 	_frame_i += 1
 	if upload_interval > 1 and (_frame_i % upload_interval) != 0:
 		return
 	var t0 := Time.get_ticks_usec()
-	var world: SimulationWorld = _sim_node.get_simulation()
 	_sync_agents(world)
 	_sync_fields(world)
 	Telemetry.render_time_ms = float(Time.get_ticks_usec() - t0) / 1000.0
@@ -244,3 +266,46 @@ func _sync_fields(world: SimulationWorld) -> void:
 	_field_mmi.multimesh.visible_instance_count = written
 	if written > 0:
 		_field_mmi.multimesh.buffer = _field_buffer
+
+
+func _sync_fire(world: SimulationWorld) -> void:
+	if _fire_mmi == null:
+		return
+	if not SimConfig.show_fire_volumes:
+		_fire_mmi.multimesh.visible_instance_count = 0
+		return
+	var written := 0
+	for v in world.fire.volumes:
+		if written >= FIRE_CAP:
+			break
+		if not v.active:
+			continue
+		var life_t: float = 1.0 - (v.age / maxf(v.lifetime, 0.01))
+		var s: float = v.radius * (0.55 + 0.45 * life_t)
+		var base: int = written * FIRE_STRIDE
+		_fire_buffer[base + 0] = s
+		_fire_buffer[base + 1] = 0.0
+		_fire_buffer[base + 2] = 0.0
+		_fire_buffer[base + 3] = v.position.x
+		_fire_buffer[base + 4] = 0.0
+		_fire_buffer[base + 5] = 0.25 + life_t * 0.5
+		_fire_buffer[base + 6] = 0.0
+		_fire_buffer[base + 7] = v.position.y
+		_fire_buffer[base + 8] = 0.0
+		_fire_buffer[base + 9] = 0.0
+		_fire_buffer[base + 10] = s
+		_fire_buffer[base + 11] = v.position.z
+		written += 1
+	_fire_mmi.multimesh.visible_instance_count = written
+	if written > 0:
+		_fire_mmi.multimesh.buffer = _fire_buffer
+
+
+func _sync_combat_ring(world: SimulationWorld) -> void:
+	if _ring_mi == null:
+		return
+	_ring_mi.visible = SimConfig.show_combat_ring
+	if not _ring_mi.visible:
+		return
+	_ring_mi.global_position = Vector3(world.player_position.x, 0.15, world.player_position.z)
+
