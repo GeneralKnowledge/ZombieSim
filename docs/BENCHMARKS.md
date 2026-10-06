@@ -34,16 +34,23 @@ Stdout includes `BENCH_RESULT {...}`.
 
 ## Notes
 
-### 2026-10-06 — headless Godot 4.3.stable (CI VM, no GPU render)
+### 2026-10-06 — performance pass (post-fix)
 
-Hardware: cloud agent VM · Renderer: headless dummy (render_time_ms = 0) · VSync off · 5s runs
+**Root cause of the bad first build:** SphereMesh MultiMeshes + per-frame `sort_custom` + `set_instance_transform` loops + Forward+ + CharacterBody3D camera + full-array level counts every tick.
 
-| Bench | Pop | Avg FPS | Min FPS | Avg frame ms | Max frame ms | Avg sim ms | Mem MB | Agents | Fields | Field pop | Notes |
-|-------|-----|---------|---------|--------------|--------------|------------|--------|--------|--------|-----------|-------|
-| A | 10k | 145 | 1* | 6.9 | 37.7 | 6.4 | 17.7 | 10000 | 0 | 0 | All SoA agents |
-| C | 100k | 57 | 1* | 17.6 | 38.2 | 17.6 | 20.7 | ~27k | 326 | ~73k | Field-heavy spawn |
-| F | 1M | 31 | 1* | 32.5 | 142 | 32.1 | 25.7 | ~23k | 3194 | ~977k | Aggregate million |
+**Fixes:** PointMesh MultiMesh, bulk `buffer` upload, no sort, gl_compatibility, Node3D fly cam, 20 Hz fixed sim, O(1) level counters, skip empty field/horde systems, software-GL upload throttle.
 
-\* `min_fps` spikes on first frames during spawn; prefer avg metrics.
+#### OpenGL windowed probe (llvmpipe software GL — this CI VM has no real GPU)
 
-Architecture validation: `godot --headless --path . res://tools/validate_architecture.tscn`
+`tools/fps_probe.tscn` · VSync off · 1s warmup + 3s sample · all 10k dots visible
+
+| Build | Pop | Visible | Avg FPS | Avg frame ms | Avg sim ms | Avg render CPU ms |
+|-------|-----|---------|---------|--------------|------------|-------------------|
+| Before | 10k | ~2.6k | ~27 | ~36 | ~6 | ~8 |
+| After | 10k | 10k | ~82 | ~12 | ~1.2 | ~6.7 (every 3rd frame) |
+
+Expect much higher FPS on a discrete/integrated GPU with `upload_interval = 1`.
+
+#### Headless architecture check
+
+`godot --headless --path . res://tools/validate_architecture.tscn` → `VALIDATE_OK`

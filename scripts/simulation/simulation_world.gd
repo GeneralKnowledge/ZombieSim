@@ -58,7 +58,13 @@ func bootstrap(initial_pop: int) -> void:
 
 
 func _spawn_agents(amount: int, center: Vector3, radius: float) -> void:
-	agents.spawn_batch(amount, center, radius, SimConfig.LEVEL_LIGHTWEIGHT, SimConfig.FACTION_ZOMBIE, _rng)
+	# Keep M1/M2 bootstrap dense enough to be visible near the camera.
+	var r := radius
+	if amount <= 10000:
+		r = minf(radius, 90.0)
+	elif amount <= 50000:
+		r = minf(radius, 160.0)
+	agents.spawn_batch(amount, center, r, SimConfig.LEVEL_LIGHTWEIGHT, SimConfig.FACTION_ZOMBIE, _rng)
 
 
 func add_zombies(amount: int, as_horde: bool = false) -> void:
@@ -115,57 +121,61 @@ func tick(delta: float) -> void:
 	var attract := SimConfig.attract_active
 	var t0: int
 	var t_section: int
+	var has_fields := fields.living_count() > 0
+	var has_hordes := hordes.living_count() > 0
 
 	t0 = Time.get_ticks_usec()
-	# Population fields (Level 0)
-	fields.update(delta, player_position, attract, half_extent)
+	if has_fields:
+		fields.update(delta, player_position, attract, half_extent)
 	Telemetry.population_update_ms = float(Time.get_ticks_usec() - t0) / 1000.0
 
 	t_section = Time.get_ticks_usec()
-	hordes.update(delta, fields, player_position, attract)
+	if has_hordes:
+		hordes.update(delta, fields, player_position, attract)
 	Telemetry.horde_update_ms = float(Time.get_ticks_usec() - t_section) / 1000.0
 
 	t_section = Time.get_ticks_usec()
 	var budget := SimConfig.MAX_AGENT_UPDATES_PER_FRAME
-	# Prefer updating active/detailed first by temporarily higher budget when few agents
 	last_agents_updated = agents.update_motion(delta, player_position, attract, budget, half_extent)
 	Telemetry.agent_update_ms = float(Time.get_ticks_usec() - t_section) / 1000.0
 
 	t_section = Time.get_ticks_usec()
-	# Materialise gradually near player — never dump entire horde
-	last_materialised = fields.materialise_near(
-		agents,
-		player_position,
-		SimConfig.RADIUS_LIGHTWEIGHT,
-		SimConfig.MAX_MATERIALISATIONS_PER_FRAME
-	)
-	# Dematerialise only under heavy individual load — small benches stay as dots.
-	# Far lightweight agents collapse into Level 0 fields beyond a wide keep radius.
-	if agents.living_count() > SimConfig.MAX_VISIBLE_AGENTS * 2:
+	if has_fields:
+		last_materialised = fields.materialise_near(
+			agents,
+			player_position,
+			SimConfig.RADIUS_LIGHTWEIGHT,
+			SimConfig.MAX_MATERIALISATIONS_PER_FRAME
+		)
+	if agents.living > SimConfig.MAX_VISIBLE_AGENTS * 2:
 		last_dematerialised = fields.absorb_agents(
 			agents,
 			player_position,
 			SimConfig.RADIUS_VISIBLE * 1.5,
 			SimConfig.MAX_MATERIALISATIONS_PER_FRAME
 		)
-	var level_changes := relevance.apply_levels(
-		agents,
-		player_position,
-		SimConfig.MAX_MATERIALISATIONS_PER_FRAME,
-		SimConfig.MAX_MATERIALISATIONS_PER_FRAME
-	)
-	last_materialised += level_changes.x
-	last_dematerialised += level_changes.y
+	# Relevance only when individuals exist; uses AgentStore.set_level counters.
+	if agents.living > 0:
+		var level_changes := relevance.apply_levels(
+			agents,
+			player_position,
+			SimConfig.MAX_MATERIALISATIONS_PER_FRAME,
+			SimConfig.MAX_MATERIALISATIONS_PER_FRAME
+		)
+		last_materialised += level_changes.x
+		last_dematerialised += level_changes.y
 	Telemetry.materialisation_ms = float(Time.get_ticks_usec() - t_section) / 1000.0
 
-	_merge_timer += delta
-	if _merge_timer >= 0.5:
-		_merge_timer = 0.0
-		fields.try_merge(SimConfig.FIELD_MERGE_DISTANCE)
-		fields.try_split_overdense()
+	if has_fields:
+		_merge_timer += delta
+		if _merge_timer >= 0.5:
+			_merge_timer = 0.0
+			fields.try_merge(SimConfig.FIELD_MERGE_DISTANCE)
+			fields.try_split_overdense()
 
+	# Spatial hash only when something queries it (deferred for later systems).
 	_rebuild_spatial_timer += delta
-	if _rebuild_spatial_timer >= 0.2:
+	if _rebuild_spatial_timer >= 1.0 and agents.living > 0:
 		_rebuild_spatial_timer = 0.0
 		spatial.rebuild_from_agents(agents)
 
@@ -174,9 +184,9 @@ func tick(delta: float) -> void:
 
 func _publish_telemetry() -> void:
 	Telemetry.population = total_population()
-	Telemetry.lightweight_agents = agents.count_by_level(SimConfig.LEVEL_LIGHTWEIGHT)
-	Telemetry.active_agents = agents.count_by_level(SimConfig.LEVEL_ACTIVE)
-	Telemetry.detailed_agents = agents.count_by_level(SimConfig.LEVEL_DETAILED)
+	Telemetry.lightweight_agents = agents.count_lightweight
+	Telemetry.active_agents = agents.count_active
+	Telemetry.detailed_agents = agents.count_detailed
 	Telemetry.population_fields = fields.living_count()
 	Telemetry.horde_count = hordes.living_count()
 	Telemetry.materialisations_this_frame = last_materialised

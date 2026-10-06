@@ -1,5 +1,6 @@
-extends CharacterBody3D
+extends Node3D
 ## Free-fly camera for the Million Dot benchmark world.
+## Node3D (not CharacterBody3D) — no physics body cost.
 
 @export var move_speed: float = 40.0
 @export var fast_multiplier: float = 4.0
@@ -31,16 +32,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		camera.rotation.x = _pitch
 
 
-func _physics_process(delta: float) -> void:
+func _process(delta: float) -> void:
 	var input_dir := Vector3.ZERO
+	var basis_cam := camera.global_transform.basis
 	if Input.is_action_pressed("move_forward"):
-		input_dir -= camera.global_transform.basis.z
+		input_dir -= basis_cam.z
 	if Input.is_action_pressed("move_back"):
-		input_dir += camera.global_transform.basis.z
+		input_dir += basis_cam.z
 	if Input.is_action_pressed("move_left"):
-		input_dir -= camera.global_transform.basis.x
+		input_dir -= basis_cam.x
 	if Input.is_action_pressed("move_right"):
-		input_dir += camera.global_transform.basis.x
+		input_dir += basis_cam.x
 	if Input.is_action_pressed("move_up"):
 		input_dir += Vector3.UP
 	if Input.is_action_pressed("move_down"):
@@ -50,5 +52,4 @@ func _physics_process(delta: float) -> void:
 		speed *= fast_multiplier
 	if input_dir.length_squared() > 0.0001:
 		global_position += input_dir.normalized() * speed * delta
-	# Attract stimulus
 	SimConfig.attract_active = Input.is_action_pressed("attract")

@@ -5,11 +5,12 @@ extends Node
 # --- Hard caps (prevent performance cliffs) ---
 var MAX_DETAILED_AGENTS: int = 128
 var MAX_ACTIVE_AGENTS: int = 1024
-var MAX_VISIBLE_AGENTS: int = 8000
+var MAX_VISIBLE_AGENTS: int = 12000
 var MAX_PATHFINDING_REQUESTS_PER_FRAME: int = 32
-var MAX_MATERIALISATIONS_PER_FRAME: int = 64
+var MAX_MATERIALISATIONS_PER_FRAME: int = 32
 var MAX_AI_DECISIONS_PER_FRAME: int = 128
-var MAX_AGENT_UPDATES_PER_FRAME: int = 50000
+## Per sim tick (sim runs ~20 Hz), not per rendered frame.
+var MAX_AGENT_UPDATES_PER_FRAME: int = 10000
 
 # --- Spatial ---
 var CELL_SIZE: float = 16.0

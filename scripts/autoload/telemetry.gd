@@ -117,10 +117,11 @@ func snapshot() -> Dictionary:
 
 func format_hud() -> String:
 	var s := snapshot()
+	var gpu := RenderingServer.get_video_adapter_name()
 	return (
 		"FPS %d  (min %d avg %.0f)\n" % [int(s.fps), int(s.min_fps) if s.min_fps < 9000 else 0, s.avg_fps]
 		+ "Frame %.2f ms  (max %.2f avg %.2f)\n" % [s.frame_time_ms, s.max_frame_time_ms, s.avg_frame_time_ms]
-		+ "Sim %.2f ms  Render %.2f ms\n" % [s.sim_time_ms, s.render_time_ms]
+		+ "Sim %.2f ms  RenderCPU %.2f ms\n" % [s.sim_time_ms, s.render_time_ms]
 		+ "  pop %.2f  agents %.2f  hordes %.2f  mat %.2f\n" % [
 			s.population_update_ms, s.agent_update_ms, s.horde_update_ms, s.materialisation_ms
 		]
@@ -130,4 +131,5 @@ func format_hud() -> String:
 		+ "Visible dots %d\n" % s.visible_dots
 		+ "Mat/demat %d / %d\n" % [s.materialisations_this_frame, s.dematerialisations_this_frame]
 		+ "Memory %.1f MB\n" % s.static_memory_mb
+		+ "GPU %s\n" % gpu
 	)

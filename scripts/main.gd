@@ -2,16 +2,21 @@ extends Node3D
 ## Main orchestration node. Mass population lives in SimulationWorld (data), not SceneTree.
 
 @export var initial_population: int = 10000
+## Simulation tick rate. Render runs every frame; sim is fixed-step.
+@export var sim_hz: float = 20.0
 
-@onready var player: CharacterBody3D = $Player
+@onready var player: Node3D = $Player
 @onready var renderer: Node3D = $AgentRenderer
 @onready var debug_ui: CanvasLayer = $DebugUI
 
 var world: SimulationWorld = SimulationWorld.new()
 var _step_once: bool = false
+var _sim_accum: float = 0.0
 
 
 func _ready() -> void:
+	# Prefer uncapped FPS for benchmarking.
+	Engine.max_fps = 0
 	if initial_population > 0:
 		SimConfig.initial_population = initial_population
 	world.half_extent = SimConfig.WORLD_HALF_EXTENT
@@ -32,15 +37,33 @@ func _process(delta: float) -> void:
 		SimConfig.simulation_paused = not SimConfig.simulation_paused
 	if Input.is_action_just_pressed("step_sim"):
 		_step_once = true
-	var should_tick := not SimConfig.simulation_paused or _step_once
-	if should_tick:
+
+	if _step_once:
 		var t0 := Telemetry.begin_sim()
-		world.tick(delta)
+		world.tick(1.0 / maxf(sim_hz, 1.0))
 		Telemetry.end_sim(t0)
 		_step_once = false
-		if SimConfig.simulation_paused:
-			# After a single step, stay paused
-			pass
+		return
+
+	if SimConfig.simulation_paused:
+		return
+
+	var step := 1.0 / maxf(sim_hz, 1.0)
+	_sim_accum += delta
+	# Avoid spiral of death — at most 2 sim steps per rendered frame.
+	var steps := 0
+	var t0 := Telemetry.begin_sim()
+	while _sim_accum >= step and steps < 2:
+		world.tick(step)
+		_sim_accum -= step
+		steps += 1
+	if steps == 0:
+		# Still publish player-facing telemetry cadence when sim is ahead.
+		pass
+	Telemetry.end_sim(t0)
+	# If we were heavily behind, drop backlog.
+	if _sim_accum > step * 2.0:
+		_sim_accum = 0.0
 
 
 func _on_debug_command(cmd: String, amount: int) -> void:

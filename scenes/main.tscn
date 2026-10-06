@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://bmainmillion001"]
+[gd_scene load_steps=7 format=3 uid="uid://bmainmillion001"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/player/fly_camera.gd" id="2_fly"]
@@ -13,12 +13,10 @@ ambient_light_source = 1
 ambient_light_color = Color(0.55, 0.58, 0.5, 1)
 ambient_light_energy = 0.85
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_player"]
-size = Vector3(1, 1, 1)
-
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
 initial_population = 10000
+sim_hz = 20.0
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_main")
@@ -31,12 +29,9 @@ shadow_enabled = false
 [node name="World" type="Node3D" parent="."]
 script = ExtResource("3_world")
 
-[node name="Player" type="CharacterBody3D" parent="."]
+[node name="Player" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 25, 60)
 script = ExtResource("2_fly")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
-shape = SubResource("BoxShape3D_player")
 
 [node name="Camera3D" type="Camera3D" parent="Player"]
 current = true

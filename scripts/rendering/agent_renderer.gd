@@ -1,84 +1,93 @@
 extends Node3D
-## Simulation → positions → MultiMesh → GPU instancing.
-## Does not own simulation state. Caps visible instances via MAX_VISIBLE_AGENTS.
-
-@export var simulation_path: NodePath
+## Fast path: one uncolored MultiMesh for mass dots + tiny colored Multimesh for LOD.
+## Bulk buffer upload. No sort. No SphereMesh.
 
 var _sim_node: Node = null
-var _batches_light: Array[MultiMeshInstance3D] = []
-var _batches_active: Array[MultiMeshInstance3D] = []
-var _batches_detailed: Array[MultiMeshInstance3D] = []
+var _mmi: MultiMeshInstance3D
+var _lod_mmi: MultiMeshInstance3D
 var _field_mmi: MultiMeshInstance3D
-var _mesh_light: SphereMesh
-var _mesh_active: SphereMesh
-var _mesh_detailed: SphereMesh
-var _mesh_field: SphereMesh
-var _mat_light: StandardMaterial3D
-var _mat_active: StandardMaterial3D
-var _mat_detailed: StandardMaterial3D
-var _mat_field: StandardMaterial3D
+var _buffer: PackedFloat32Array = PackedFloat32Array()
+var _lod_buffer: PackedFloat32Array = PackedFloat32Array()
+var _field_buffer: PackedFloat32Array = PackedFloat32Array()
+var _scan_cursor: int = 0
+var _frame_i: int = 0
+var upload_interval: int = 1
 
-var _xform_cache: Array[Transform3D] = []
+const MASS_STRIDE := 12
+const LOD_STRIDE := 16
+const FIELD_STRIDE := 12
+const LOD_CAP := 1536
 
 
 func _ready() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
-	_build_materials()
-	_field_mmi = _make_mmi(_mesh_field, _mat_field, 512)
+	# Software renderers cannot sustain full-rate MultiMesh uploads — throttle.
+	var gpu := RenderingServer.get_video_adapter_name().to_lower()
+	if "llvmpipe" in gpu or "softpipe" in gpu or "swrast" in gpu:
+		upload_interval = 3
+	_mmi = _make_mmi(_make_point_mesh(), _make_point_mat(Color(0.55, 0.78, 0.25)), false, SimConfig.MAX_VISIBLE_AGENTS)
+	add_child(_mmi)
+	_lod_mmi = _make_mmi(_make_point_mesh(), _make_point_mat(Color.WHITE), true, LOD_CAP)
+	add_child(_lod_mmi)
+	_field_mmi = _make_mmi(_make_field_mesh(), _make_mat(Color(0.35, 0.65, 0.95, 0.45), true), false, 256)
 	add_child(_field_mmi)
+	_buffer.resize(SimConfig.MAX_VISIBLE_AGENTS * MASS_STRIDE)
+	_lod_buffer.resize(LOD_CAP * LOD_STRIDE)
+	_field_buffer.resize(256 * FIELD_STRIDE)
+	_mmi.multimesh.buffer = _buffer
+	_lod_mmi.multimesh.buffer = _lod_buffer
+	_field_mmi.multimesh.buffer = _field_buffer
+	print("AgentRenderer ready mass=%d lod=%d upload_interval=%d gpu=%s" % [
+		_mmi.multimesh.instance_count, LOD_CAP, upload_interval, RenderingServer.get_video_adapter_name()
+	])
 
 
 func bind_simulation(node: Node) -> void:
 	_sim_node = node
 
 
-func _build_materials() -> void:
-	_mesh_light = SphereMesh.new()
-	_mesh_light.radius = 0.2
-	_mesh_light.height = 0.4
-	_mesh_light.radial_segments = 4
-	_mesh_light.rings = 2
-
-	_mesh_active = SphereMesh.new()
-	_mesh_active.radius = 0.32
-	_mesh_active.height = 0.64
-	_mesh_active.radial_segments = 6
-	_mesh_active.rings = 3
-
-	_mesh_detailed = SphereMesh.new()
-	_mesh_detailed.radius = 0.45
-	_mesh_detailed.height = 0.9
-	_mesh_detailed.radial_segments = 8
-	_mesh_detailed.rings = 4
-
-	_mesh_field = SphereMesh.new()
-	_mesh_field.radius = 1.0
-	_mesh_field.height = 2.0
-	_mesh_field.radial_segments = 8
-	_mesh_field.rings = 4
-
-	_mat_light = StandardMaterial3D.new()
-	_mat_light.albedo_color = Color(0.55, 0.75, 0.25)
-	_mat_light.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-
-	_mat_active = StandardMaterial3D.new()
-	_mat_active.albedo_color = Color(0.95, 0.55, 0.15)
-	_mat_active.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-
-	_mat_detailed = StandardMaterial3D.new()
-	_mat_detailed.albedo_color = Color(0.95, 0.2, 0.2)
-	_mat_detailed.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-
-	_mat_field = StandardMaterial3D.new()
-	_mat_field.albedo_color = Color(0.3, 0.55, 0.85, 0.55)
-	_mat_field.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_mat_field.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+func _make_mat(color: Color, transparent: bool) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.vertex_color_use_as_albedo = true
+	if transparent:
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return mat
 
 
-func _make_mmi(mesh: Mesh, mat: Material, alloc: int) -> MultiMeshInstance3D:
+func _make_point_mat(color: Color) -> StandardMaterial3D:
+	var mat := _make_mat(color, false)
+	mat.use_point_size = true
+	mat.point_size = 3.0
+	return mat
+
+
+func _make_point_mesh() -> PointMesh:
+	return PointMesh.new()
+
+
+func _make_field_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var y := 0.2
+	var s := 1.0
+	st.set_normal(Vector3.UP)
+	st.add_vertex(Vector3(-s, y, -s))
+	st.add_vertex(Vector3(s, y, -s))
+	st.add_vertex(Vector3(s, y, s))
+	st.add_vertex(Vector3(-s, y, -s))
+	st.add_vertex(Vector3(s, y, s))
+	st.add_vertex(Vector3(-s, y, s))
+	return st.commit()
+
+
+func _make_mmi(mesh: Mesh, mat: Material, use_colors: bool, alloc: int) -> MultiMeshInstance3D:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = use_colors
 	mm.mesh = mesh
 	mm.instance_count = alloc
 	mm.visible_instance_count = 0
@@ -89,24 +98,13 @@ func _make_mmi(mesh: Mesh, mat: Material, alloc: int) -> MultiMeshInstance3D:
 	return mmi
 
 
-func _ensure_batches(pool: Array[MultiMeshInstance3D], mesh: Mesh, mat: Material, needed: int) -> void:
-	var batch := SimConfig.MULTIMESH_BATCH_SIZE
-	var batches_needed := int(ceili(float(needed) / float(batch)))
-	while pool.size() < batches_needed:
-		var mmi := _make_mmi(mesh, mat, batch)
-		add_child(mmi)
-		pool.append(mmi)
-	for i in pool.size():
-		pool[i].visible = i < batches_needed
-		if i >= batches_needed:
-			pool[i].multimesh.visible_instance_count = 0
-
-
 func _process(_delta: float) -> void:
-	if _sim_node == null or not _sim_node.has_method("get_simulation"):
+	if _sim_node == null or _mmi == null:
 		return
-	# Headless/dummy renderer has no real mesh surfaces — skip GPU upload.
 	if DisplayServer.get_name() == "headless":
+		return
+	_frame_i += 1
+	if upload_interval > 1 and (_frame_i % upload_interval) != 0:
 		return
 	var t0 := Time.get_ticks_usec()
 	var world: SimulationWorld = _sim_node.get_simulation()
@@ -117,95 +115,130 @@ func _process(_delta: float) -> void:
 
 func _sync_agents(world: SimulationWorld) -> void:
 	var store: AgentStore = world.agents
-	var cam: Camera3D = get_viewport().get_camera_3d()
-	var cam_pos: Vector3 = world.player_position
-	if cam != null:
-		cam_pos = cam.global_position
 	var max_vis: int = SimConfig.MAX_VISIBLE_AGENTS
-	var radius: float = SimConfig.RADIUS_VISIBLE
-	var radius_sq: float = radius * radius
+	var count: int = store.count
+	if count == 0 or store.living == 0:
+		_mmi.multimesh.visible_instance_count = 0
+		_lod_mmi.multimesh.visible_instance_count = 0
+		Telemetry.visible_dots = 0
+		return
 
-	# Collect candidates with cheap distance score; prefer nearer
-	var light_idx := PackedInt32Array()
-	var active_idx := PackedInt32Array()
-	var detailed_idx := PackedInt32Array()
-	var scored: Array[Vector2] = []
+	var cam: Camera3D = get_viewport().get_camera_3d()
+	var cx: float = world.player_position.x
+	var cy: float = world.player_position.y
+	var cz: float = world.player_position.z
+	if cam != null:
+		var cp := cam.global_position
+		cx = cp.x
+		cy = cp.y
+		cz = cp.z
 
-	for i in store.count:
-		if store.alive[i] == 0:
-			continue
-		var dx: float = store.pos_x[i] - cam_pos.x
-		var dy: float = store.pos_y[i] - cam_pos.y
-		var dz: float = store.pos_z[i] - cam_pos.z
-		var d2: float = dx * dx + dy * dy + dz * dz
-		if d2 > radius_sq:
-			continue
-		scored.append(Vector2(d2, float(i)))
+	var radius_sq: float = SimConfig.RADIUS_VISIBLE * SimConfig.RADIUS_VISIBLE
+	var show_levels: bool = SimConfig.show_simulation_levels
+	var mass_scale: float = SimConfig.DOT_SCALE_LIGHTWEIGHT
+	var written := 0
+	var lod_written := 0
+	var scanned := 0
+	var i: int = _scan_cursor
+	var fits_all := store.living <= max_vis
 
-	scored.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
-
-	var visible := 0
-	for entry: Vector2 in scored:
-		if visible >= max_vis:
+	while scanned < count and written < max_vis:
+		if store.alive[i] != 0:
+			var px: float = store.pos_x[i]
+			var py: float = store.pos_y[i]
+			var pz: float = store.pos_z[i]
+			var dx: float = px - cx
+			var dy: float = py - cy
+			var dz: float = pz - cz
+			if dx * dx + dy * dy + dz * dz <= radius_sq:
+				var lvl: int = store.level[i]
+				if show_levels and lvl >= SimConfig.LEVEL_ACTIVE and lod_written < LOD_CAP:
+					var scale: float = SimConfig.DOT_SCALE_ACTIVE if lvl == SimConfig.LEVEL_ACTIVE else SimConfig.DOT_SCALE_DETAILED
+					var base: int = lod_written * LOD_STRIDE
+					_lod_buffer[base + 0] = scale
+					_lod_buffer[base + 1] = 0.0
+					_lod_buffer[base + 2] = 0.0
+					_lod_buffer[base + 3] = px
+					_lod_buffer[base + 4] = 0.0
+					_lod_buffer[base + 5] = scale
+					_lod_buffer[base + 6] = 0.0
+					_lod_buffer[base + 7] = py
+					_lod_buffer[base + 8] = 0.0
+					_lod_buffer[base + 9] = 0.0
+					_lod_buffer[base + 10] = scale
+					_lod_buffer[base + 11] = pz
+					if lvl == SimConfig.LEVEL_ACTIVE:
+						_lod_buffer[base + 12] = 0.95
+						_lod_buffer[base + 13] = 0.55
+						_lod_buffer[base + 14] = 0.15
+					else:
+						_lod_buffer[base + 12] = 0.95
+						_lod_buffer[base + 13] = 0.2
+						_lod_buffer[base + 14] = 0.2
+					_lod_buffer[base + 15] = 1.0
+					lod_written += 1
+				else:
+					var b: int = written * MASS_STRIDE
+					_buffer[b + 0] = mass_scale
+					_buffer[b + 1] = 0.0
+					_buffer[b + 2] = 0.0
+					_buffer[b + 3] = px
+					_buffer[b + 4] = 0.0
+					_buffer[b + 5] = mass_scale
+					_buffer[b + 6] = 0.0
+					_buffer[b + 7] = py
+					_buffer[b + 8] = 0.0
+					_buffer[b + 9] = 0.0
+					_buffer[b + 10] = mass_scale
+					_buffer[b + 11] = pz
+					written += 1
+		i += 1
+		if i >= count:
+			i = 0
+		scanned += 1
+		if fits_all and i == _scan_cursor and scanned > 0:
 			break
-		var i: int = int(entry.y)
-		match store.level[i]:
-			SimConfig.LEVEL_DETAILED:
-				detailed_idx.append(i)
-			SimConfig.LEVEL_ACTIVE:
-				active_idx.append(i)
-			_:
-				light_idx.append(i)
-		visible += 1
 
-	_upload(store, light_idx, _batches_light, _mesh_light, _mat_light, SimConfig.DOT_SCALE_LIGHTWEIGHT)
-	_upload(store, active_idx, _batches_active, _mesh_active, _mat_active, SimConfig.DOT_SCALE_ACTIVE)
-	_upload(store, detailed_idx, _batches_detailed, _mesh_detailed, _mat_detailed, SimConfig.DOT_SCALE_DETAILED)
-	Telemetry.visible_dots = visible
-
-
-func _upload(
-	store: AgentStore,
-	indices: PackedInt32Array,
-	pool: Array[MultiMeshInstance3D],
-	mesh: Mesh,
-	mat: Material,
-	scale: float
-) -> void:
-	_ensure_batches(pool, mesh, mat, maxi(indices.size(), 1))
-	var batch := SimConfig.MULTIMESH_BATCH_SIZE
-	var basis := Basis.IDENTITY.scaled(Vector3(scale, scale, scale))
-	for b in pool.size():
-		var mm: MultiMesh = pool[b].multimesh
-		var start := b * batch
-		if start >= indices.size():
-			mm.visible_instance_count = 0
-			continue
-		var count := mini(batch, indices.size() - start)
-		mm.visible_instance_count = count
-		for k in count:
-			var i: int = indices[start + k]
-			var xf := Transform3D(basis, Vector3(store.pos_x[i], store.pos_y[i], store.pos_z[i]))
-			mm.set_instance_transform(k, xf)
+	_scan_cursor = i
+	_mmi.multimesh.visible_instance_count = written
+	_lod_mmi.multimesh.visible_instance_count = lod_written
+	if written > 0:
+		_mmi.multimesh.buffer = _buffer
+	if lod_written > 0:
+		_lod_mmi.multimesh.buffer = _lod_buffer
+	Telemetry.visible_dots = written + lod_written
 
 
 func _sync_fields(world: SimulationWorld) -> void:
+	if _field_mmi == null:
+		return
 	if not SimConfig.show_population_fields:
 		_field_mmi.multimesh.visible_instance_count = 0
 		return
 	var cells: Array[PopulationFieldSystem.PopulationCell] = world.fields.cells
-	var living: Array[PopulationFieldSystem.PopulationCell] = []
-	for c in cells:
-		if c.active and c.population > 0:
-			living.append(c)
-	var n: int = mini(living.size(), _field_mmi.multimesh.instance_count)
-	_field_mmi.multimesh.visible_instance_count = n
-	for i in n:
-		var cell: PopulationFieldSystem.PopulationCell = living[i]
-		var s: float = clampf(cell.radius * 0.35, 1.0, SimConfig.FIELD_MARKER_SCALE * 4.0)
-		# Encode population loosely in scale
-		s *= clampf(1.0 + log(float(cell.population) + 1.0) * 0.08, 1.0, 3.0)
-		var xf := Transform3D(Basis.IDENTITY.scaled(Vector3(s, s, s)), cell.position)
-		_field_mmi.multimesh.set_instance_transform(i, xf)
-	# Field markers also contribute to visible count conceptually
-	Telemetry.visible_dots += n
+	var cap: int = _field_mmi.multimesh.instance_count
+	var written := 0
+	for cell in cells:
+		if written >= cap:
+			break
+		if not cell.active or cell.population <= 0:
+			continue
+		var s: float = clampf(cell.radius * 0.25, 0.8, 8.0)
+		s *= clampf(1.0 + log(float(cell.population) + 1.0) * 0.06, 1.0, 2.5)
+		var base: int = written * FIELD_STRIDE
+		_field_buffer[base + 0] = s
+		_field_buffer[base + 1] = 0.0
+		_field_buffer[base + 2] = 0.0
+		_field_buffer[base + 3] = cell.position.x
+		_field_buffer[base + 4] = 0.0
+		_field_buffer[base + 5] = 0.15
+		_field_buffer[base + 6] = 0.0
+		_field_buffer[base + 7] = cell.position.y
+		_field_buffer[base + 8] = 0.0
+		_field_buffer[base + 9] = 0.0
+		_field_buffer[base + 10] = s
+		_field_buffer[base + 11] = cell.position.z
+		written += 1
+	_field_mmi.multimesh.visible_instance_count = written
+	if written > 0:
+		_field_mmi.multimesh.buffer = _field_buffer
