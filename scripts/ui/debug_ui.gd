@@ -52,5 +52,5 @@ func _on_telemetry(_s: Dictionary) -> void:
 			str(SimConfig.isometric_mode),
 			str(SimConfig.show_combat_ring),
 		]
-		+ "WASD+QE move | Shift sprint | Space attract | R shoot | F molotov | I iso | Esc mouse"
+		+ "WASD move | Shift sprint | LMB/C shoot | F molotov | R reload | G interact | I cam"
 	)

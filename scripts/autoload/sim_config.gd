@@ -65,7 +65,7 @@ var DOT_SCALE_DETAILED: float = 0.85
 var FIELD_MARKER_SCALE: float = 2.5
 var show_combat_ring: bool = true
 var show_fire_volumes: bool = true
-var isometric_mode: bool = false
+var isometric_mode: bool = true
 
 # --- Simulation levels (bit-friendly ints) ---
 const LEVEL_FIELD: int = 0

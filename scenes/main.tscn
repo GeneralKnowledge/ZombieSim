@@ -1,10 +1,14 @@
-[gd_scene load_steps=7 format=3 uid="uid://bmainmillion001"]
+[gd_scene load_steps=12 format=3 uid="uid://bmainmillion001"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
-[ext_resource type="Script" path="res://scripts/player/fly_camera.gd" id="2_fly"]
-[ext_resource type="Script" path="res://scripts/world/world_setup.gd" id="3_world"]
-[ext_resource type="Script" path="res://scripts/rendering/agent_renderer.gd" id="4_render"]
-[ext_resource type="Script" path="res://scripts/ui/debug_ui.gd" id="5_ui"]
+[ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="2_player"]
+[ext_resource type="Script" path="res://scripts/player/iso_camera.gd" id="3_cam"]
+[ext_resource type="Script" path="res://scripts/world/world_setup.gd" id="4_world"]
+[ext_resource type="Script" path="res://scripts/world/interactables.gd" id="5_interact"]
+[ext_resource type="Script" path="res://scripts/rendering/agent_renderer.gd" id="6_render"]
+[ext_resource type="Script" path="res://scripts/ui/debug_ui.gd" id="7_ui"]
+[ext_resource type="Script" path="res://scripts/ui/game_hud.gd" id="8_hud"]
+[ext_resource type="Script" path="res://scripts/game/sandbox_director.gd" id="9_dir"]
 
 [sub_resource type="Environment" id="Environment_main"]
 background_mode = 1
@@ -13,9 +17,17 @@ ambient_light_source = 1
 ambient_light_color = Color(0.55, 0.58, 0.5, 1)
 ambient_light_energy = 0.85
 
+[sub_resource type="CapsuleShape3D" id="CapsuleShape_player"]
+radius = 0.4
+height = 1.6
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_player"]
+radius = 0.4
+height = 1.6
+
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
-initial_population = 10000
+initial_population = 2500
 sim_hz = 20.0
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
@@ -28,22 +40,72 @@ shadow_enabled = false
 light_specular = 0.0
 
 [node name="World" type="Node3D" parent="."]
-script = ExtResource("3_world")
+script = ExtResource("4_world")
 
-[node name="Player" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 25, 60)
-script = ExtResource("2_fly")
+[node name="Interactables" type="Node3D" parent="World"]
+script = ExtResource("5_interact")
 
-[node name="Camera3D" type="Camera3D" parent="Player"]
+[node name="Player" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+script = ExtResource("2_player")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
+shape = SubResource("CapsuleShape_player")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Player"]
+mesh = SubResource("CapsuleMesh_player")
+
+[node name="Facing" type="Node3D" parent="Player"]
+
+[node name="CameraRig" type="Node3D" parent="."]
+script = ExtResource("3_cam")
+target_path = NodePath("../Player")
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig"]
 current = true
 fov = 70.0
 far = 2000.0
 
 [node name="AgentRenderer" type="Node3D" parent="."]
-script = ExtResource("4_render")
+script = ExtResource("6_render")
+
+[node name="SandboxDirector" type="Node" parent="."]
+script = ExtResource("9_dir")
+player_path = NodePath("../Player")
+main_path = NodePath("..")
+auto_start = true
+base_horde = 8000
+
+[node name="GameHUD" type="CanvasLayer" parent="."]
+script = ExtResource("8_hud")
+
+[node name="GameHudLabel" type="Label" parent="GameHUD"]
+unique_name_in_owner = true
+offset_left = 12.0
+offset_top = 300.0
+offset_right = 480.0
+offset_bottom = 420.0
+theme_override_colors/font_color = Color(0.95, 0.95, 0.85, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.85)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 16
+text = "HUD"
+
+[node name="BannerLabel" type="Label" parent="GameHUD"]
+unique_name_in_owner = true
+offset_left = 360.0
+offset_top = 40.0
+offset_right = 920.0
+offset_bottom = 90.0
+theme_override_colors/font_color = Color(1, 0.85, 0.35, 1)
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1
+text = ""
+visible = false
 
 [node name="DebugUI" type="CanvasLayer" parent="."]
-script = ExtResource("5_ui")
+script = ExtResource("7_ui")
 
 [node name="Root" type="Control" parent="DebugUI"]
 layout_mode = 3
@@ -65,26 +127,26 @@ theme_override_colors/font_color = Color(0.85, 0.95, 0.75, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
 theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 13
 text = "Telemetry"
 
 [node name="StatusLabel" type="Label" parent="DebugUI/Root"]
 unique_name_in_owner = true
 layout_mode = 0
 offset_left = 12.0
-offset_top = 660.0
-offset_right = 900.0
-offset_bottom = 710.0
+offset_top = 680.0
+offset_right = 980.0
+offset_bottom = 716.0
 theme_override_colors/font_color = Color(0.75, 0.8, 0.7, 1)
-theme_override_font_sizes/font_size = 13
+theme_override_font_sizes/font_size = 12
 text = "Controls"
 
 [node name="Panel" type="PanelContainer" parent="DebugUI/Root"]
 layout_mode = 0
-offset_left = 980.0
+offset_left = 1000.0
 offset_top = 12.0
 offset_right = 1268.0
-offset_bottom = 520.0
+offset_bottom = 560.0
 
 [node name="VBox" type="VBoxContainer" parent="DebugUI/Root/Panel"]
 layout_mode = 2
@@ -186,7 +248,7 @@ text = "Throw Molotov (F)"
 [node name="BtnIso" type="Button" parent="DebugUI/Root/Panel/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Toggle Isometric (I)"
+text = "Toggle Cam (I)"
 
 [node name="BtnRing" type="Button" parent="DebugUI/Root/Panel/VBox"]
 unique_name_in_owner = true
