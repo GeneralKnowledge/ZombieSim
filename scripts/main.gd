@@ -23,9 +23,17 @@ func _ready() -> void:
 	SimConfig.isometric_mode = true
 	SimConfig.initial_population = initial_population
 	SimConfig.attract_active = true
-	# Sandbox starts quieter; waves add the pressure.
+	SimConfig.city_mode = true
 	world.half_extent = SimConfig.WORLD_HALF_EXTENT
-	world.bootstrap(initial_population)
+	# Bind city nav graph before population bootstrap.
+	if world_node.has_method("get_nav"):
+		world.nav = world_node.get_nav()
+	if world_node.has_method("get_city_meta"):
+		world.bind_city_meta(world_node.get_city_meta())
+	if SimConfig.city_mode and world.city_meta.get("spawn_points", []).size() > 0:
+		world.bootstrap_city(initial_population)
+	else:
+		world.bootstrap(initial_population)
 	if renderer.has_method("bind_simulation"):
 		renderer.bind_simulation(self)
 	if camera_rig.has_method("set_target"):
@@ -38,7 +46,9 @@ func _ready() -> void:
 	if interact and interact.has_signal("loot_taken"):
 		interact.loot_taken.connect(_on_loot)
 	debug_ui.command.connect(_on_debug_command)
-	print("Combat sandbox ready. Population=%d" % world.total_population())
+	print("M9 city sandbox ready. Population=%d regions=%d connections=%d" % [
+		world.total_population(), world.nav.region_count(), world.nav.connection_count()
+	])
 
 
 func get_simulation() -> SimulationWorld:
@@ -144,11 +154,14 @@ func _on_debug_command(cmd: String, amount: int) -> void:
 			SimConfig.show_simulation_levels = not SimConfig.show_simulation_levels
 		"toggle_grid":
 			SimConfig.show_spatial_grid = not SimConfig.show_spatial_grid
+		"toggle_nav":
+			SimConfig.show_navigation = not SimConfig.show_navigation
+		"toggle_flow":
+			SimConfig.show_flow_fields = not SimConfig.show_flow_fields
 		"toggle_ring":
 			SimConfig.show_combat_ring = not SimConfig.show_combat_ring
 		"toggle_iso":
 			if camera_rig.has_method("_unhandled_input"):
-				# Reuse camera toggle action
 				SimConfig.isometric_mode = not SimConfig.isometric_mode
 				if camera_rig.has_method("_apply_mode"):
 					camera_rig._apply_mode()
@@ -157,7 +170,7 @@ func _on_debug_command(cmd: String, amount: int) -> void:
 		"step":
 			_step_once = true
 		"density":
-			world.extreme_density_building(amount)
+			world.extreme_density_building(amount if amount > 0 else 100000)
 		"molotov":
 			_do_molotov()
 		"shoot":
@@ -165,11 +178,20 @@ func _on_debug_command(cmd: String, amount: int) -> void:
 		"reset_stats":
 			Telemetry.reset_stats()
 			world.combat.clear_stats()
+		"reset_benchmark":
+			SimConfig.initial_population = amount if amount > 0 else SimConfig.initial_population
+			world.reset_benchmark()
+		"city_100k":
+			SimConfig.initial_population = 100000
+			world.bootstrap_city(100000)
+		"bottleneck":
+			world.bootstrap_bottleneck(amount if amount > 0 else 100000)
 		"wave":
 			if director.has_method("_next_wave"):
 				director._next_wave()
 		_:
 			push_warning("Unknown debug command: %s" % cmd)
-	print("CMD %s(%d) → population=%d agents=%d fires=%d" % [
-		cmd, amount, world.total_population(), world.agents.living_count(), world.fire.living_count()
+	print("CMD %s(%d) → population=%d agents=%d fields=%d hordes=%d fires=%d" % [
+		cmd, amount, world.total_population(), world.agents.living_count(),
+		world.fields.living_count(), world.hordes.living_count(), world.fire.living_count()
 	])

@@ -10,7 +10,7 @@ LOG="$OUT/bench_${STAMP}.log"
 echo "Using: $($GODOT --version 2>/dev/null || echo godot)"
 echo "Logging to $LOG"
 
-for key in a b c d e f; do
+for key in a b c d e f g h i j; do
   scene="res://scenes/benchmarks/benchmark_${key}.tscn"
   echo "=== Running $scene ===" | tee -a "$LOG"
   "$GODOT" --headless --path "$ROOT" "$scene" 2>&1 | tee -a "$LOG" || true

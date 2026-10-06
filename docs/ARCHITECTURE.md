@@ -1,4 +1,4 @@
-# Architecture — Million Dot
+# Architecture — ZombieSim / Million Dot
 
 ## Separation of concerns
 
@@ -7,8 +7,11 @@ SIMULATION (RefCounted data)
   ├── AgentStore (SoA packed arrays)
   ├── PopulationFieldSystem
   ├── HordeSystem
+  ├── NavGraph (regions + capacity connections)
+  ├── JourneySystem (distant aggregate travel)
   ├── SpatialHash
   ├── RelevanceSystem
+  ├── CombatRing / FireSystem
   └── budgets / tick orchestration
           │
           ▼
@@ -42,47 +45,57 @@ Mass agents are rows in packed arrays. Godot Nodes represent player, camera, wor
 
 Transitions are **budgeted per frame**. Walking into a 100k horde must not materialise 100k individuals.
 
+## M9 — City navigation & population flow
+
+```
+CityBuilder (deterministic seed)
+        │
+        ▼
+   NavGraph regions + connections
+        │  (doors / streets / stairs / corridors + capacity/sec)
+        ▼
+Population fields steer via flow field (BFS to player region)
+        │
+        ▼
+Capacity-limited population_transfer across connections
+        │
+        ├── source field population decreases
+        └── destination field population increases
+```
+
+- No `NavigationAgent3D` per zombie.
+- Bottlenecks create **pressure**, not physics explosions.
+- Hordes split toward alternate connections when blocked; merge when nearby with shared destination.
+- Extremely distant hordes may become **journeys** (origin/destination/ETA) and reconstruct on arrival.
+
 ## Hordes
 
 A horde is an aggregate:
 
 - population, center, extent, density, velocity, destination
-- cohesion / alertness / faction
-- list of **population field** indices
+- cohesion / alertness / faction / pressure / navigation_state
+- flow_target connection + region_id
+- list of **population field** indices (reclaimed by horde_id scan)
 
 Split/merge operate on field membership and weighted centers — not per-zombie iteration of 100k identities.
 
-## Crowd motion (v1)
+**Population conservation:** before = after + legitimate_deaths for split/merge/transfer/materialise/journey/combat/fire.
 
-- No per-agent A*.
-- Fields and agents steer with potential-style attraction (player stimulus) + wander + cohesion.
-- M6 will add navigation surfaces / flow fields for multi-floor routing.
-- Door flow for extreme density is pressure → destination transfer on fields.
+## Crowd motion
+
+- No per-agent A* for the mass population.
+- Fields use nav flow targets under attraction; individuals near the player use direct steering.
+- Door flow: pressure → capacity-limited transfer.
+- Path queries are reserved for journeys / rare aggregate routing (`MAX_PATHFINDING_REQUESTS_PER_FRAME`).
 
 ## Rendering
 
-- Simple sphere meshes, unshaded materials.
+- PointMesh MultiMesh for mass dots; field markers for aggregates.
 - Visual language: small green = lightweight, orange = active, red = detailed, translucent blue = population field.
 - Frustum/distance gate + `MAX_VISIBLE_AGENTS`.
-- Multiple MultiMesh batches (`MULTIMESH_BATCH_SIZE`) for GPU instancing.
+- Simulation does not depend on the renderer.
 
-## Threading policy
-
-Architecture keeps systems separable (fields / agents / relevance). **Do not parallelise until profiles show a bottleneck.** Prefer correctness and budgets first.
-
-## Rust escape hatch
-
-Only after:
-
-1. Godot implementation
-2. profile
-3. architecture optimisation
-4. profile again
-5. identified CPU-bound hot loop
-
-Then isolate behind a narrow API (e.g. positions/densities in/out). Do not design v1 around GDExtension.
-
-## Combat ring + fire (vertical slice)
+## Combat ring + fire
 
 ```
 Player aim / shoot / molotov
@@ -95,24 +108,8 @@ Player aim / shoot / molotov
  FireSystem volumes
         │ burn agents in radius (budgeted scan)
         │ burn overlapping fields aggregately
-        ▼
- shared VFX markers (MultiMesh fire patches)
 ```
 
-Molotovs never create per-zombie flame nodes. Hordes lose population through field burn + flee velocity.
+## Threading / Rust
 
-## File map
-
-```
-scripts/
-  autoload/sim_config.gd      budgets & toggles
-  autoload/telemetry.gd       first-class profiling
-  simulation/*.gd             mass population + combat/fire
-  rendering/agent_renderer.gd MultiMesh sync
-  player/fly_camera.gd        fly / isometric + aim
-  world/world_setup.gd        primitive 3D world
-  ui/debug_ui.gd              stress controls
-  benchmarks/benchmark_runner.gd
-scenes/main.tscn
-scenes/benchmarks/benchmark_{a-f}.tscn
-```
+Do not parallelise or add Rust until profiles show a bottleneck after architectural optimisation.

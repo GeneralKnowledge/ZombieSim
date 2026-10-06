@@ -5,8 +5,8 @@ config_version=5
 
 [application]
 
-config/name="Million Dot"
-config/description="Godot mass-NPC technical prototype: data-oriented population, MultiMesh rendering, hordes."
+config/name="ZombieSim"
+config/description="Godot mass-NPC technical prototype: 100k zombie city, data-oriented population, MultiMesh rendering, hordes."
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.3", "Forward Plus")
 config/icon="res://icon.svg"
