@@ -38,6 +38,7 @@ small capped set of detailed NPCs
 ```bash
 # Optional CLI (headless smoke / benchmarks)
 godot --path . --quit-after 3
+godot --headless --path . res://tools/validate_architecture.tscn
 godot --headless --path . res://scenes/benchmarks/benchmark_a.tscn
 ./tools/run_benchmarks.sh
 ```
