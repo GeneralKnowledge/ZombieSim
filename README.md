@@ -74,6 +74,9 @@ Rendering (`scripts/rendering/agent_renderer.gd`) reads simulation data and uplo
 | Split / Merge Hordes | Population-field manipulation |
 | Space / Toggle Attract | Strong stimulus toward player |
 | Extreme Density 100k | Constrained high-pressure field |
+| Shoot (R) / click | Hitscan combat ring; else field damage |
+| Molotov (F) | Area fire — individuals + aggregate fields |
+| Toggle Isometric (I) | Orthographic iso camera |
 | Pause / Step | Deterministic inspection |
 | Toggle Population Fields | Show/hide Level 0 markers |
 

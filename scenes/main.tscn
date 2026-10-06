@@ -172,3 +172,23 @@ text = "Step One Tick"
 unique_name_in_owner = true
 layout_mode = 2
 text = "Reset Telemetry Stats"
+
+[node name="BtnShoot" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Shoot (R)"
+
+[node name="BtnMolotov" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Throw Molotov (F)"
+
+[node name="BtnIso" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Toggle Isometric (I)"
+
+[node name="BtnRing" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Toggle Combat Ring"

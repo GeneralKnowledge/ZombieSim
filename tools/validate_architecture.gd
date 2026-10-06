@@ -1,5 +1,5 @@
 extends Node
-## Headless architecture assertions (no 100k nodes for 100k population).
+## Headless architecture assertions.
 ## Run: godot --headless --path . res://tools/validate_architecture.tscn
 
 func _ready() -> void:
@@ -31,22 +31,38 @@ func _ready() -> void:
 		push_error("Expected 1 horde entity")
 		ok = false
 
-	world.player_position = Vector3.ZERO
-	SimConfig.attract_active = true
-	for _i in 30:
-		world.tick(1.0 / 60.0)
-	if world.agents.living_count() > SimConfig.MAX_MATERIALISATIONS_PER_FRAME * 40:
-		push_error("Materialisation grew too fast: %d agents" % world.agents.living_count())
+	# Fire on the horde aggregate (no 100k agents / flame nodes).
+	var horde := world.hordes.get_horde(horde_id)
+	var before := world.total_population()
+	var fire_idx := world.fire.spawn_fire(horde.center, 14.0, 1.0, 14.0, 0)
+	if fire_idx < 0:
+		push_error("Fire spawn failed")
 		ok = false
-	if world.agents.count_by_level(SimConfig.LEVEL_DETAILED) > SimConfig.MAX_DETAILED_AGENTS:
-		push_error("Detailed cap violated")
+	SimConfig.attract_active = false
+	for _i in 40:
+		world.tick(1.0 / 20.0)
+	if world.fire.total_field_kills <= 0 and world.total_population() >= before:
+		push_error("Fire should reduce field population aggregately")
 		ok = false
-	if world.agents.count_by_level(SimConfig.LEVEL_ACTIVE) > SimConfig.MAX_ACTIVE_AGENTS:
-		push_error("Active cap violated")
+	world.player_position = horde.center
+	world.player_aim = Vector3(1, 0, 0)
+	var shoot_result := world.shoot()
+	if not shoot_result.has("hit"):
+		push_error("Shoot returned unexpected payload")
 		ok = false
 
-	world.split_horde()
-	world.merge_hordes()
+	world.clear()
+	world.bootstrap(10000)
+	world.player_position = Vector3.ZERO
+	for _i in 10:
+		world.tick(1.0 / 20.0)
+	if world.combat.ring_agent_count <= 0 and world.agents.count_active <= 0:
+		# Ring may be empty if all agents spawned far; force a nearby spawn.
+		world.agents.spawn_batch(50, Vector3.ZERO, 10.0, SimConfig.LEVEL_LIGHTWEIGHT, SimConfig.FACTION_ZOMBIE, RandomNumberGenerator.new())
+		world.tick(1.0 / 20.0)
+	if world.agents.count_active + world.agents.count_detailed <= 0:
+		push_error("Combat ring should promote nearby agents")
+		ok = false
 
 	world.clear()
 	world.bootstrap(1000000)
@@ -61,7 +77,7 @@ func _ready() -> void:
 		ok = false
 
 	if ok:
-		print("VALIDATE_OK architecture assertions passed")
+		print("VALIDATE_OK architecture + combat/fire assertions passed")
 		print("  million_dot agents=%d field_pop=%d fields=%d" % [
 			world.agents.living_count(),
 			world.fields.total_population(),

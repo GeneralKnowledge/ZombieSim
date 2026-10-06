@@ -29,6 +29,10 @@ func _wire_buttons() -> void:
 	_bind("%BtnStep", "step", 0)
 	_bind("%BtnDensity", "density", 100000)
 	_bind("%BtnResetStats", "reset_stats", 0)
+	_bind("%BtnMolotov", "molotov", 0)
+	_bind("%BtnShoot", "shoot", 0)
+	_bind("%BtnIso", "toggle_iso", 0)
+	_bind("%BtnRing", "toggle_ring", 0)
 
 
 func _bind(path: String, cmd: String, amount: int) -> void:
@@ -40,11 +44,13 @@ func _bind(path: String, cmd: String, amount: int) -> void:
 func _on_telemetry(_s: Dictionary) -> void:
 	telemetry_label.text = Telemetry.format_hud()
 	status_label.text = (
-		"Attract: %s | Paused: %s | Fields: %s | Levels: %s\n" % [
+		"Attract:%s Paused:%s Fields:%s Levels:%s Iso:%s Ring:%s\n" % [
 			str(SimConfig.attract_active),
 			str(SimConfig.simulation_paused),
 			str(SimConfig.show_population_fields),
 			str(SimConfig.show_simulation_levels),
+			str(SimConfig.isometric_mode),
+			str(SimConfig.show_combat_ring),
 		]
-		+ "WASD+QE fly | Shift sprint | Space attract | Esc mouse | P pause | . step"
+		+ "WASD+QE move | Shift sprint | Space attract | R shoot | F molotov | I iso | Esc mouse"
 	)
