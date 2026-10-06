@@ -1,0 +1,178 @@
+[gd_scene load_steps=8 format=3 uid="uid://bmainmillion001"]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/player/fly_camera.gd" id="2_fly"]
+[ext_resource type="Script" path="res://scripts/world/world_setup.gd" id="3_world"]
+[ext_resource type="Script" path="res://scripts/rendering/agent_renderer.gd" id="4_render"]
+[ext_resource type="Script" path="res://scripts/ui/debug_ui.gd" id="5_ui"]
+
+[sub_resource type="Environment" id="Environment_main"]
+background_mode = 1
+background_color = Color(0.12, 0.14, 0.16, 1)
+ambient_light_source = 1
+ambient_light_color = Color(0.55, 0.58, 0.5, 1)
+ambient_light_energy = 0.85
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_player"]
+size = Vector3(1, 1, 1)
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_main")
+initial_population = 10000
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_main")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 40, 0)
+light_energy = 1.1
+shadow_enabled = false
+
+[node name="World" type="Node3D" parent="."]
+script = ExtResource("3_world")
+
+[node name="Player" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 25, 60)
+script = ExtResource("2_fly")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
+shape = SubResource("BoxShape3D_player")
+
+[node name="Camera3D" type="Camera3D" parent="Player"]
+current = true
+fov = 70.0
+far = 2000.0
+
+[node name="AgentRenderer" type="Node3D" parent="."]
+script = ExtResource("4_render")
+
+[node name="DebugUI" type="CanvasLayer" parent="."]
+script = ExtResource("5_ui")
+
+[node name="Root" type="Control" parent="DebugUI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="TelemetryLabel" type="Label" parent="DebugUI/Root"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 12.0
+offset_top = 12.0
+offset_right = 420.0
+offset_bottom = 280.0
+theme_override_colors/font_color = Color(0.85, 0.95, 0.75, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 14
+text = "Telemetry"
+
+[node name="StatusLabel" type="Label" parent="DebugUI/Root"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 12.0
+offset_top = 660.0
+offset_right = 900.0
+offset_bottom = 710.0
+theme_override_colors/font_color = Color(0.75, 0.8, 0.7, 1)
+theme_override_font_sizes/font_size = 13
+text = "Controls"
+
+[node name="Panel" type="PanelContainer" parent="DebugUI/Root"]
+layout_mode = 0
+offset_left = 980.0
+offset_top = 12.0
+offset_right = 1268.0
+offset_bottom = 520.0
+
+[node name="VBox" type="VBoxContainer" parent="DebugUI/Root/Panel"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="DebugUI/Root/Panel/VBox"]
+layout_mode = 2
+text = "Million Dot Debug"
+
+[node name="Btn1k" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "+1,000 Zombies"
+
+[node name="Btn10k" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "+10,000 Zombies"
+
+[node name="Btn100k" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "+100,000 Zombies"
+
+[node name="Btn1m" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "+1,000,000 Zombies"
+
+[node name="BtnHorde" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Create 100k Horde"
+
+[node name="BtnSplit" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Split Horde"
+
+[node name="BtnMerge" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Merge Hordes"
+
+[node name="BtnAttract" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Toggle Attract"
+
+[node name="BtnRelease" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Release Zombies"
+
+[node name="BtnFields" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Toggle Population Fields"
+
+[node name="BtnLevels" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Toggle Simulation Levels"
+
+[node name="BtnGrid" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Toggle Spatial Grid"
+
+[node name="BtnDensity" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Extreme Density 100k"
+
+[node name="BtnPause" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Pause Simulation"
+
+[node name="BtnStep" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Step One Tick"
+
+[node name="BtnResetStats" type="Button" parent="DebugUI/Root/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Reset Telemetry Stats"

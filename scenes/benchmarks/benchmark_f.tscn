@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://bbenchf00001"]
+
+[ext_resource type="Script" path="res://scripts/benchmarks/benchmark_runner.gd" id="1_bench"]
+
+[node name="Benchmark" type="Node"]
+script = ExtResource("1_bench")
+population = 1000000
+duration_sec = 5.0
+label = "Benchmark F — 1M"

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect width="128" height="128" fill="#1a1f16"/>
+  <circle cx="32" cy="40" r="3" fill="#8bc34a"/>
+  <circle cx="48" cy="52" r="3" fill="#8bc34a"/>
+  <circle cx="64" cy="36" r="3" fill="#cddc39"/>
+  <circle cx="80" cy="58" r="3" fill="#8bc34a"/>
+  <circle cx="96" cy="44" r="3" fill="#8bc34a"/>
+  <circle cx="40" cy="72" r="4" fill="#ff7043"/>
+  <circle cx="72" cy="80" r="5" fill="#ff5252"/>
+  <circle cx="56" cy="96" r="6" fill="#e53935"/>
+  <text x="64" y="120" text-anchor="middle" font-family="monospace" font-size="10" fill="#aed581">1M</text>
+</svg>

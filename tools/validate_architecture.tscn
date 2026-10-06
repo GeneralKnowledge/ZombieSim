@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://bvalidatearch01"]
+
+[ext_resource type="Script" path="res://tools/validate_architecture.gd" id="1_val"]
+
+[node name="Validate" type="Node"]
+script = ExtResource("1_val")
