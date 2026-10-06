@@ -154,8 +154,8 @@ func tick(delta: float) -> void:
 			SimConfig.RADIUS_VISIBLE * 1.5,
 			SimConfig.MAX_MATERIALISATIONS_PER_FRAME
 		)
-	# Relevance only when individuals exist; uses AgentStore.set_level counters.
-	if agents.living > 0:
+	# Relevance / LOD promotions — skip when level visuals are disabled.
+	if agents.living > 0 and SimConfig.show_simulation_levels:
 		var level_changes := relevance.apply_levels(
 			agents,
 			player_position,

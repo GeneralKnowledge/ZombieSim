@@ -26,6 +26,8 @@ func _ready() -> void:
 	var gpu := RenderingServer.get_video_adapter_name().to_lower()
 	if "llvmpipe" in gpu or "softpipe" in gpu or "swrast" in gpu:
 		upload_interval = 3
+		# Level-colored LOD MultiMesh is a second upload; skip on software GL.
+		SimConfig.show_simulation_levels = false
 	_mmi = _make_mmi(_make_point_mesh(), _make_point_mat(Color(0.55, 0.78, 0.25)), false, SimConfig.MAX_VISIBLE_AGENTS)
 	add_child(_mmi)
 	_lod_mmi = _make_mmi(_make_point_mesh(), _make_point_mat(Color.WHITE), true, LOD_CAP)

@@ -122,7 +122,7 @@ func format_hud() -> String:
 		"FPS %d  (min %d avg %.0f)\n" % [int(s.fps), int(s.min_fps) if s.min_fps < 9000 else 0, s.avg_fps]
 		+ "Frame %.2f ms  (max %.2f avg %.2f)\n" % [s.frame_time_ms, s.max_frame_time_ms, s.avg_frame_time_ms]
 		+ "Sim %.2f ms  RenderCPU %.2f ms\n" % [s.sim_time_ms, s.render_time_ms]
-		+ "  pop %.2f  agents %.2f  hordes %.2f  mat %.2f\n" % [
+		+ "  fieldUpd %.2f  agentUpd %.2f  hordeUpd %.2f  matUpd %.2f\n" % [
 			s.population_update_ms, s.agent_update_ms, s.horde_update_ms, s.materialisation_ms
 		]
 		+ "Population %d\n" % s.population

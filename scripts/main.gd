@@ -17,6 +17,8 @@ var _sim_accum: float = 0.0
 func _ready() -> void:
 	# Prefer uncapped FPS for benchmarking.
 	Engine.max_fps = 0
+	# Relevance promotions are for gameplay LOD; keep mass dots lightweight at boot.
+	SimConfig.MAX_ACTIVE_AGENTS = 256
 	if initial_population > 0:
 		SimConfig.initial_population = initial_population
 	world.half_extent = SimConfig.WORLD_HALF_EXTENT
